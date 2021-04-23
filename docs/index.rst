@@ -4,31 +4,35 @@
    contain the root `toctree` directive.
 
 Welcome to BrainFlow's documentation!
-=====================================
+=======================================
 
-Brainflow is a library intended to obtain, parse and analyze EEG\EMG\ECG data from BCI boards.
+BrainFlow is a library intended to obtain, parse and analyze EEG, EMG, ECG and other kinds of data from biosensors.
 
-We support two versions of this library:
-
-- `original version <https://github.com/Andrey1994/brainflow>`_
-- `OpenBCI\'s fork <https://github.com/OpenBCI/brainflow>`_
-
-These versions are exactly the same, choose one and use it
+It provides a **uniform data acquisition API for all supported boards**, it means that you can switch boards without any changes in code and applications on top of BrainFlow are board agnostic. Also there is **powerful API to perform signal processing** which you can use even without BCI headset. Both of these two APIs are the same across bindings.
 
 
 .. toctree::
-	SupportedBoards
-	BuildBrainFlow
-	CoreModuleAPI
-	UserAPI
-	Examples
-	BrainFlowDev
-	BrainFlowEmulator
-	AskHelp
-	License
+    SupportedBoards
+    BuildBrainFlow
+    UserAPI
+    DataFormatDesc
+    Examples
+    GameEngines
+    BrainFlowDev
+    AskHelp
+    Partners
+    License
 
+
+Partners and Sponsors
+=======================
+
+.. image:: https://live.staticflickr.com/65535/49739828092_fa2f4d78c1_h.jpg
+    :width: 400px
+    :height: 89px
+    :target: https://openbci.com
 
 Search
-==================
+========
 
 * :ref:`search`

@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <string>
 #include <thread>
 
 #include "board.h"
@@ -14,8 +15,15 @@ class Ganglion : public Board
 {
 
 private:
-    float const accel_scale = 0.032f;
+    static int num_objects;
+
+    bool is_valid;
+
+    float const accel_scale = 0.016f;
     float const eeg_scale = (1.2f * 1000000) / (8388607.0f * 1.5f * 51.0f);
+
+    std::string start_command;
+    std::string stop_command;
 
     volatile bool keep_alive;
     bool initialized;
@@ -24,33 +32,32 @@ private:
 
     bool use_mac_addr;
     int num_channels;
-    DLLLoader *dll_loader;
 
+    // legacy from shared library, now we can do the same wo these helpers but lets keep it
     int call_init ();
     int call_config (char *config);
     int call_open ();
     int call_close ();
     int call_start ();
     int call_stop ();
+    int call_release ();
 
-    /*
-    at least for windows from time to time callback for value change notification is not triggered
-    restart solves this issue, so if callback is not tiriggered we will reset Ganglion Device and
-    wait in main thread for data
-    */
     std::mutex m;
     std::condition_variable cv;
     volatile int state;
 
     void read_thread ();
+    int start_streaming_prepared ();
+
+    DLLLoader *dll_loader;
 
 public:
     Ganglion (struct BrainFlowInputParams params);
     ~Ganglion ();
 
     int prepare_session ();
-    int start_stream (int buffer_size);
+    int start_stream (int buffer_size, char *streamer_params);
     int stop_stream ();
     int release_session ();
-    int config_board (char *config);
+    int config_board (std::string config, std::string &response);
 };

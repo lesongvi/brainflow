@@ -1,42 +1,154 @@
+.. _supported-boards-label:
+
 Supported Boards
 =================
 
+To create an instance of BoardShim class for your board check required inputs in the table below:
+
+.. csv-table:: Required inputs
+   :header: "Board", "Board Id", "BrainFlowInputParams.serial_port", "BrainFlowInputParams.mac_address", "BrainFlowInputParams.ip_address", "BrainFlowInputParams.ip_port", "BrainFlowInputParams.ip_protocol", "BrainFlowInputParams.other_info", "BrainFlowInputParams.timeout", "BrainFlowInputParams.serial_number", "BrainFlowInputParams.file"
+
+   "Playback Board", "BoardIds.PLAYBACK_FILE_BOARD (-3)", "-", "-", "-", "-", "-", "Board Id of master board", "-", "-", "path to file for playback"
+   "Streaming Board", "BoardIds.STREAMING_BOARD (-2)", "-", "-", "multicast IP address", "port", "-", "Board Id of master board", "-", "-", "-"
+   "Synthetic Board", "BoardIds.SYNTHETIC_BOARD (-1)", "-", "-", "-", "-", "-", "-", "-", "-", "-"
+   "Cyton", "BoardIds.CYTON_BOARD (0)", "dongle serial port(COM3, /dev/ttyUSB0, /dev/cu.usbserial-xxxxxx...)", "-", "-", "-", "-", "-", "-", "-", "-"
+   "Ganglion", "BoardIds.GANGLION_BOARD (1)", "dongle serial port(COM3, /dev/ttyUSB0...)", "Optional: Ganglion's MAC address", "-", "-", "-", "-", "Timeout for device discovery(default 15sec)", "-", "-"
+   "Cyton Daisy", "BoardIds.CYTON_DAISY_BOARD (2)", "dongle serial port(COM3, /dev/ttyUSB0, /dev/cu.usbserial-xxxxxx...)", "-", "-", "-", "-", "-", "-", "-", "-"
+   "Ganglion WIFI", "BoardIds.GANGLION_WIFI_BOARD (4)", "-", "-", "WIFI Shield IP(default 192.168.4.1)", "any local port which is free", "-", "-", "Timeout for HTTP response(default 10sec)", "-", "-"
+   "Cyton WIFI", "BoardIds.CYTON_WIFI_BOARD (5)", "-", "-", "WIFI Shield IP(default 192.168.4.1)", "any local port which is free", "-", "-", "Timeout for HTTP response(default 10sec)", "-", "-"
+   "Cyton Daisy WIFI", "BoardIds.CYTON_DAISY_WIFI_BOARD (6)", "-", "-", "WIFI Shield IP(default 192.168.4.1)", "any local port which is free", "-", "-", "Timeout for HTTP response(default 10sec)", "-", "-"
+   "BrainBit", "BoardIds.BRAINBIT_BOARD (7)", "-", "-", "-", "-", "-", "-", "Timeout for device discovery(default 15sec)", "Optional: Serial Number of BrainBit device", "-"
+   "Unicorn", "BoardIds.UNICORN_BOARD (8)", "-", "-", "-", "-", "-", "-", "-", "Optional: Serial Number of Unicorn device", "-"
+   "CallibriEEG", "BoardIds.CALLIBRI_EEG_BOARD (9)", "-", "-", "-", "-", "-", "Optional: ExternalSwitchInputMioUSB (default is ExternalSwitchInputMioElectrodes)", "Timeout for device discovery(default 15sec)", "-", "-"
+   "CallibriEMG", "BoardIds.CALLIBRI_EMG_BOARD (10)", "-", "-", "-", "-", "-", "Optional: ExternalSwitchInputMioUSB (default is ExternalSwitchInputMioElectrodes)", "Timeout for device discovery(default 15sec)", "-", "-"
+   "CallibriECG", "BoardIds.CALLIBRI_ECG_BOARD (11)", "-", "-", "-", "-", "-", "Optional: ExternalSwitchInputMioUSB (default is ExternalSwitchInputMioElectrodes)", "Timeout for device discovery(default 15sec)", "-", "-"
+   "Notion 1", "BoardIds.NOTION_1_BOARD (13)", "-", "-", "-", "-", "-", "-", "-", "Optional: serial number", "-"
+   "Notion 2", "BoardIds.NOTION_2_BOARD (14)", "-", "-", "-", "-", "-", "-", "-", "Optional: serial number", "-"
+
+
+Playback File Board
+--------------------
+
+This board playbacks file recorded using another BrainFlow board.
+
+**It can be extremely useful during development.**
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: -3
+- other_info field of BrainFlowInputParams structure, write there board_id for a board which acts like data provider(master board)
+- file field of BrainFlowInputParams structure
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+
+In methods like:
+
+.. code-block:: python
+
+   get_eeg_channels (board_id)
+   get_emg_channels (board_id)
+   get_ecg_channels (board_id)
+   # .......
+
+
+You need to use master board id instead Playback Board Id, because exact data format for streaming board is controlled by master board as well as sampling rate
+
+Board Specs:
+
+- num eeg(emg,...) channels: like in master board
+- num acceleration channels: like in master board
+- sampling rate: like in master board
+- communication: UDP multicast socket to read data from master board
+
+Streaming Board
+------------------
+
+BrainFlow's boards can stream data to different destinations like file, socket and so on. This board acts like a consumer for data streamed from the main process.
+
+**To use it in the first process you should call:**
+
+.. code-block:: python
+
+    # choose any valid multicast address(from "224.0.0.0" to "239.255.255.255") and port
+    start_stream (450000, 'streaming_board://225.1.1.1:6677')
+
+**In the second process please specify:**
+
+- board_id: -2
+- ip_address field of BrainFlowInputParams structure, for example above it's 225.1.1.1
+- ip_port field of BrainFlowInputParams structure, for example above it's 6677
+- other_info field of BrainFlowInputParams structure, write there board_id for a board which acts like data provider(master board)
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+
+In methods like:
+
+.. code-block:: python
+
+   get_eeg_channels (board_id)
+   get_emg_channels (board_id)
+   get_ecg_channels (board_id)
+   # .......
+
+You need to use master board id instead Streaming Board Id, because exact data format for streaming board is controlled by master board as well as sampling rate.
+
+Board Specs:
+
+- num eeg(emg,...) channels: like in master board
+- num acceleration channels: like in master board
+- sampling rate: like in master board
+- communication: UDP multicast socket to read data from master board
 
 Synthetic Board
 ----------------
 
-
 This board generates synthetic data and you dont need real hardware to use it.
 
-To choose this board in BoardShim class please specify:
+**It can be extremely useful during development.**
+
+To choose this board in BoardShim constructor please specify:
 
 - board_id: -1
+- you dont need to set any fields in BrainFlowInputParams structure
 
 Supported platforms:
 
 - Windows >= 8.1
 - Linux
 - MacOS
+- Android
 
 Board Specs:
 
-- num eeg(emg) channels: 8
+- num eeg(emg,...) channels: 8
 - num acceleration channels: 3
 - sampling rate: 256
 - communication: None
 
+OpenBCI
+--------
 
-OpenBCI Cyton
---------------
+Cyton
+~~~~~~~
 
-.. image:: https://farm5.staticflickr.com/4817/32567183898_10a4b56659.jpg
+.. image:: https://i.ibb.co/cNj9pyf/Cyton.jpg
+    :width: 200px
+    :height: 200px
 
-`Cyton geting started guide from OpenBCI <https://docs.openbci.com/Tutorials/00-Tutorials>`_.
+`Cyton Getting Started Guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/CytonGS>`_
 
-To choose this board in BoardShim class please specify:
+To choose this board in BoardShim constructor please specify:
 
 - board_id: 0
-- serial_port field of BrainFlowInputStruct
+- serial_port field of BrainFlowInputParams structure
 
 Supported platforms:
 
@@ -44,160 +156,333 @@ Supported platforms:
 - Linux
 - MacOS
 
+**On MacOS there are two serial ports for each device: /dev/tty..... and /dev/cu..... You HAVE to specify /dev/cu.....**
+
 Board Spec:
 
-- num eeg(emg) channels: 8
+- num eeg(emg,...) channels: 8
 - num acceleration channels: 3
 - sampling rate: 250
 - communication: serial port
+- signal gain: 24
 
-OpenBCI Ganglion
------------------
+Ganglion
+~~~~~~~~~
 
 .. image:: https://live.staticflickr.com/65535/48288408326_7f078cd2eb.jpg
+    :width: 400px
+    :height: 230px
 
-`Ganglion geting started guide from OpenBCI <https://docs.openbci.com/Tutorials/00-Tutorials>`_.
+`Ganglion Getting Started Guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/GanglionGS>`_
 
-prepare_session args to select this board:
+**To use Ganglion board you need a** `dongle <https://shop.openbci.com/collections/frontpage/products/ganglion-dongle>`_
 
-To choose this board in BoardShim class please specify:
+To choose this board in BoardShim constructor please specify:
 
 - board_id: 1
-- mac_address field of BrainFlowInputStruct, if its empty BrainFlow will try to autodiscover it
+- serial_port field of BrainFlowInputParams structure
+- mac_address field of BrainFlowInputParams structure, if its empty BrainFlow will try to autodiscover Ganglion
+- optional: timeout field of BrainFlowInputParams structure, default is 15sec
+
+To get Ganglion's MAC address you can use:
+
+- Windows: `Bluetooth LE Explorer App <https://www.microsoft.com/en-us/p/bluetooth-le-explorer/9n0ztkf1qd98?activetab=pivot:overviewtab>`_
+- Linux: hcitool command
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+
+**On MacOS there are two serial ports for each device: /dev/tty..... and /dev/cu..... You HAVE to specify /dev/cu.....**
+
+Board Spec:
+
+- num eeg(emg,...) channels: 4
+- num acceleration channels: 3
+- sampling rate: 200
+- communication: Bluetooth Low Energy behind serial port from the dongle
+
+Cyton Daisy
+~~~~~~~~~~~~
+
+.. image:: https://live.staticflickr.com/65535/48288597712_7ba142797e.jpg
+    :width: 400px
+    :height: 394px
+
+`CytonDaisy Getting Started Guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/DaisyGS>`_
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 2
+- serial_port field of BrainFlowInputParams structure
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+
+**On MacOS there are two serial ports for each device: /dev/tty..... and /dev/cu..... You HAVE to specify /dev/cu.....**
+
+Board Spec:
+
+- num eeg(emg,...) channels: 16
+- num acceleration channels: 3
+- sampling rate: 125
+- communication: serial port
+- signal gain: 24
+
+
+Ganglion with WIFI Shield
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. image:: https://live.staticflickr.com/65535/48836544227_05059fc450_b.jpg
+    :width: 300px
+    :height: 300px
+
+`WIFI Shield Getting Started Guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/WiFiGS>`_
+
+`WIFI Shield Programming Guide from OpenBCI <https://docs.openbci.com/docs/05ThirdParty/03-WiFiShield/WiFiProgam>`_
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 4
+- ip_address field of BrainFlowInputParams structure should contain WiFi Shield Ip address(in direct mode its 192.168.4.1), if it's empty BrainFlow will try to autodiscover WIFI Shield and in case of failure will try to use 192.168.4.1
+- ip_port field of BrainFlowInputParams structure should be any local port which is free right now
+- optional: timeout field of BrainFlowInputParams structure, default is 10sec
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+- Android
+
+Board Spec:
+
+- num eeg(emg,...) channels: 4
+- num acceleration channels: 3
+- sampling rate: 1600
+- communication: TCP socket to read data and HTTP to send commands
+
+Cyton with WIFI Shield
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. image:: https://live.staticflickr.com/65535/48836367066_a8c4b6d3be_b.jpg
+    :width: 400px
+    :height: 325px
+
+`WIFI shield Getting Started Guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/WiFiGS>`_
+
+`WIFI shield Programming Guide from OpenBCI <https://docs.openbci.com/docs/05ThirdParty/03-WiFiShield/WiFiProgam>`_
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 5
+- ip_address field of BrainFlowInputParams structure should contain WiFi Shield Ip address(in direct mode its 192.168.4.1), if it's empty BrainFlow will try to autodiscover WIFI Shield and in case of failure will try to use 192.168.4.1
+- ip_port field of BrainFlowInputParams structure should be any local port which is free right now
+- optional: timeout field of BrainFlowInputParams structure, default is 10sec
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+- Android
+
+Board Spec:
+
+- num eeg(emg,...) channels: 8
+- num acceleration channels: 3
+- sampling rate: 1000
+- communication: TCP socket to read data and HTTP to send commands
+- signal gain: 24
+
+CytonDaisy with WIFI Shield
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. image:: https://live.staticflickr.com/65535/48843419918_f11c90deb0_k.jpg
+    :width: 400px
+    :height: 400px
+
+`WIFI Shield Getting Started Guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/WiFiGS>`_
+
+`WIFI Shield Programming Guide from OpenBCI <https://docs.openbci.com/docs/05ThirdParty/03-WiFiShield/WiFiProgam>`_
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 6
+- ip_address field of BrainFlowInputParams structure should contain WiFi Shield Ip address(in direct mode its 192.168.4.1), if it's empty BrainFlow will try to autodiscover WIFI Shield and in case of failure will try to use 192.168.4.1
+- ip_port field of BrainFlowInputParams structure should be any local port which is free right now
+- optional: timeout field of BrainFlowInputParams structure, default is 10sec
+
+Supported platforms:
+
+- Windows >= 8.1
+- Linux
+- MacOS
+- Android
+
+Board Spec:
+
+- num eeg(emg,...) channels: 16
+- num acceleration channels: 3
+- sampling rate: 1000
+- communication: TCP socket to read data and HTTP to send commands
+- signal gain: 24
+
+NeuroMD
+----------
+
+BrainBit
+~~~~~~~~~~
+
+.. image:: https://live.staticflickr.com/65535/49579371806_80b1bffae1.jpg
+    :width: 400px
+    :height: 400px
+
+`BrainBit website <https://brainbit.com/>`_
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 7
+- optional: serial_number field of BrainFlowInputParams structure should contain Serial Number of BrainBit device, use it if you have multiple devices
+- optional: timeout field of BrainFlowInputParams structure, default is 15sec
 
 Supported platforms:
 
 - Windows >= 10
-- Linux
 - MacOS
-
-Additional configuration:
-
-- If you use python bindings installed from PYPI on Windows you may need to install `redist_x64 <https://aka.ms/vs/16/release/vc_redist.x64.exe>`_ or `redist_x86 <https://aka.ms/vs/16/release/vc_redist.x86.exe>`_  (but more likely you have it preinstalled)
-- For Linux/MacOS you need to use dongle, for Windows dongle is not required if you have Bluetooth on your laptop
 
 Board Spec:
 
-- num eeg(emg) channels: 4
-- num acceleration channels: 3
-- sampling rate: 200
+- num eeg channels: 4
+- num acceleration channels: None
+- sampling rate: 250
 - communication: Bluetooth Low Energy
 
 
-OpenBCI Cyton Daisy
---------------------
+Callibri(Yellow)
+~~~~~~~~~~~~~~~~~
 
-.. image:: https://live.staticflickr.com/65535/48288597712_7ba142797e.jpg
+.. image:: https://live.staticflickr.com/65535/49906443867_315307d6fc_w.jpg
+    :width: 338px
+    :height: 400px
 
-`Cyton Daisy geting started guide from OpenBCI <https://docs.openbci.com/Tutorials/00-Tutorials>`_.
+`Callibri website <https://callibri.com/>`_
 
-To choose this board in BoardShim class please specify:
+Callibri can be used to record EMG, ECG and EEG, but based on signal type you need to apply different settings for device.
 
-- board_id: 2
-- serial_port field of BrainFlowInputStruct
+BrainFlow does it for you, so there are:
+
+- CALLIBRI_EEG_BOARD (board_id 9)
+- CALLIBRI_EMG_BOARD (board_id 10)
+- CALLIBRI_ECG_BOARD (board_id 11)
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 9, 10 or 11 based on data type
+- optional: to use electrodes connected vis USB write "ExternalSwitchInputMioUSB" to other_info field of BrainFlowInputParams structure
+- optional: timeout field of BrainFlowInputParams structure, default is 15sec
 
 Supported platforms:
 
-- Windows >= 8.1
-- Linux
+- Windows >= 10
 - MacOS
 
 Board Spec:
 
-- num eeg(emg) channels: 16
-- num acceleration channels: 3
-- sampling rate: 125
+- num exg channels: 1
+- num acceleration channels: None
 - communication: Bluetooth Low Energy
 
 
-OpenBCI Ganglion with Wifi Shield
------------------------------------
+G.TEC
+------
 
-.. image:: https://live.staticflickr.com/65535/48836544227_05059fc450_b.jpg
+Unicorn
+~~~~~~~~~~~
 
-`Wifi shield geting started guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/WiFiGS>`_.
+.. image:: https://live.staticflickr.com/65535/49740988577_c54162024d_h.jpg
+    :width: 600px
+    :height: 450px
 
-`Wifi shield programming guide from OpenBCI <https://docs.openbci.com/docs/05ThirdParty/03-WiFiShield/WiFiProgam>`_.
+`Unicorn website <https://www.unicorn-bi.com/>`_
 
-To choose this board in BoardShim class please specify:
+To choose this board in BoardShim constructor please specify:
 
-- board_id: 4
-- ip_address field of BrainFlowInputStruct should contain WiFi Shield Ip address(in direct mode its 192.168.4.1)
-- ip_protocol field of BrainFlowInputStruct should be IpProtocolType.TCP
-- ip_port field of BrainFlowInputStruct should be any local port which is free right now
+- board_id: 8
+- optional: serial_number field of BrainFlowInputParams structure should contain Serial Number of BrainBit device, use it if you have multiple devices
 
 Supported platforms:
 
-- Windows >= 8.1
-- Linux
-- MacOS
-
+- Ubuntu 18.04, may work on other Linux OSes, it depends on dynamic library provided by Unicorn
+- May also work on Raspberry PI, if you replace libunicorn.so by library provided by Unicorn for Raspberry PI
 
 Board Spec:
 
-- num eeg(emg) channels: 4
+- num eeg channels: 8
 - num acceleration channels: 3
-- sampling rate: 1600
-- communication: tcp socket to read data(local port 17982) and http to send commands
+- sampling rate: 250
+- communication: Bluetooth Low Energy
 
+Neurosity
+----------
 
+Notion 1
+~~~~~~~~~
 
-OpenBCI Cyton with Wifi Shield
----------------------------------
+.. image:: https://live.staticflickr.com/65535/50093731531_68f2183bb3_o.jpg
+    :width: 250px
+    :height: 250px
 
-.. image:: https://live.staticflickr.com/65535/48836367066_a8c4b6d3be_b.jpg
+`Notion website <https://neurosity.co/>`_
 
-`Wifi shield geting started guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/WiFiGS>`_.
+`Link to Neurosity Tutorial <https://dev.to/neurosity/using-brainflow-with-the-neurosity-headset-2kof>`_
 
-`Wifi shield programming guide from OpenBCI <https://docs.openbci.com/docs/05ThirdParty/03-WiFiShield/WiFiProgam>`_.
+To choose this board in BoardShim constructor please specify:
 
-To choose this board in BoardShim class please specify:
-
-- board_id: 5
-- ip_address field of BrainFlowInputStruct should contain WiFi Shield Ip address(in direct mode its 192.168.4.1)
-- ip_protocol field of BrainFlowInputStruct should be IpProtocolType.TCP
-- ip_port field of BrainFlowInputStruct should be any local port which is free right now
+- board_id: 13
+- optional: Serial Number field of BrainFlowInputParams structure, important if you have multiple devices in the same place
 
 Supported platforms:
 
-- Windows >= 8.1
-- Linux
-- MacOS
-
-
-Board Spec:
-
-- num eeg(emg) channels: 8
-- num acceleration channels: 3
-- sampling rate: 1000
-- communication: tcp socket to read data(local port 17982) and http to send commands
-
-
-OpenBCI Cyton Daisy with Wifi Shield
---------------------------------------
-
-.. image:: https://live.staticflickr.com/65535/48843419918_f11c90deb0_k.jpg
-
-`Wifi shield geting started guide from OpenBCI <https://docs.openbci.com/docs/01GettingStarted/01-Boards/WiFiGS>`_.
-
-`Wifi shield programming guide from OpenBCI <https://docs.openbci.com/docs/05ThirdParty/03-WiFiShield/WiFiProgam>`_.
-
-To choose this board in BoardShim class please specify:
-
-- board_id: 6
-- ip_address field of BrainFlowInputStruct should contain WiFi Shield Ip address(in direct mode its 192.168.4.1)
-- ip_protocol field of BrainFlowInputStruct should be IpProtocolType.TCP
-- ip_port field of BrainFlowInputStruct should be any local port which is free right now
-
-Supported platforms:
-
-- Windows >= 8.1
+- Windows
 - Linux
 - MacOS
 
 Board Spec:
 
-- num eeg(emg) channels: 16
-- num acceleration channels: 3
-- sampling rate: 1000
-- communication: tcp socket to read data(local port 17982) and http to send commands
+- num eeg channels: 8
+- sampling rate: 250
+- communication: UDP BroadCast
+
+Notion 2
+~~~~~~~~~
+
+.. image:: https://live.staticflickr.com/65535/50093731531_68f2183bb3_o.jpg
+    :width: 250px
+    :height: 250px
+
+`Notion website <https://neurosity.co/>`_
+
+`Link to Neurosity Tutorial <https://dev.to/neurosity/using-brainflow-with-the-neurosity-headset-2kof>`_
+
+To choose this board in BoardShim constructor please specify:
+
+- board_id: 14
+- optional: Serial Number field of BrainFlowInputParams structure, important if you have multiple devices in the same place
+
+Supported platforms:
+
+- Windows
+- Linux
+- MacOS
+
+Board Spec:
+
+- num eeg channels: 8
+- sampling rate: 250
+- communication: UDP BroadCast

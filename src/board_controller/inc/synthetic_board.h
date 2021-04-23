@@ -15,12 +15,6 @@ private:
     bool is_streaming;
     std::thread streaming_thread;
 
-    int num_channels;
-    float amplitude;
-    float shift;
-    float noise;
-    int sampling_rate;
-
     void read_thread ();
 
 public:
@@ -28,8 +22,10 @@ public:
     ~SyntheticBoard ();
 
     int prepare_session ();
-    int start_stream (int buffer_size);
+    int start_stream (int buffer_size, char *streamer_params);
     int stop_stream ();
     int release_session ();
-    int config_board (char *config);
+    int config_board (std::string config, std::string &response);
+
+    static constexpr int package_size = 30;
 };

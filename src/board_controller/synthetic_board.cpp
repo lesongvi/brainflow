@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <math.h>
 #include <random>
@@ -10,7 +11,6 @@
 #include <unistd.h>
 #endif
 
-#include "openbci_helpers.h"
 #include "synthetic_board.h"
 #include "timestamp.h"
 
@@ -18,17 +18,16 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+
+constexpr int SyntheticBoard::package_size;
+
+
 SyntheticBoard::SyntheticBoard (struct BrainFlowInputParams params)
-    : Board ((int)SYNTHETIC_BOARD, params)
+    : Board ((int)BoardIds::SYNTHETIC_BOARD, params)
 {
-    this->is_streaming = false;
-    this->keep_alive = false;
-    this->initialized = false;
-    this->num_channels = 8;
-    this->amplitude = 1000;
-    this->shift = 0.3f;
-    this->noise = 0.1f;
-    this->sampling_rate = 256;
+    is_streaming = false;
+    keep_alive = false;
+    initialized = false;
 }
 
 SyntheticBoard::~SyntheticBoard ()
@@ -37,135 +36,168 @@ SyntheticBoard::~SyntheticBoard ()
     release_session ();
 }
 
-
 int SyntheticBoard::prepare_session ()
 {
     safe_logger (spdlog::level::trace, "prepare session");
     if (initialized)
     {
         safe_logger (spdlog::level::info, "Session is already prepared");
-        return STATUS_OK;
+        return (int)BrainFlowExitCodes::STATUS_OK;
     }
+
     initialized = true;
-    return STATUS_OK;
+    return (int)BrainFlowExitCodes::STATUS_OK;
 }
 
-int SyntheticBoard::start_stream (int buffer_size)
+int SyntheticBoard::start_stream (int buffer_size, char *streamer_params)
 {
     safe_logger (spdlog::level::trace, "start stream");
-    if (this->is_streaming)
+    if (is_streaming)
     {
         safe_logger (spdlog::level::err, "Streaming thread already running");
-        return STREAM_ALREADY_RUN_ERROR;
+        return (int)BrainFlowExitCodes::STREAM_ALREADY_RUN_ERROR;
     }
     if (buffer_size <= 0 || buffer_size > MAX_CAPTURE_SAMPLES)
     {
         safe_logger (spdlog::level::err, "invalid array size");
-        return INVALID_BUFFER_SIZE_ERROR;
+        return (int)BrainFlowExitCodes::INVALID_BUFFER_SIZE_ERROR;
     }
 
-    if (this->db)
+    if (streamer)
     {
-        delete this->db;
-        this->db = NULL;
+        delete streamer;
+        streamer = NULL;
     }
-    // here num channels means num_eeg_channels,total number of channels is num_eeg_channels + 1 +3
-    this->db = new DataBuffer (num_channels + 4, buffer_size);
-    if (!this->db->is_ready ())
+    if (db)
+    {
+        delete db;
+        db = NULL;
+    }
+    int res = prepare_streamer (streamer_params);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        return res;
+    }
+    db = new DataBuffer (SyntheticBoard::package_size, buffer_size);
+    if (!db->is_ready ())
     {
         safe_logger (spdlog::level::err, "unable to prepare buffer with size {}", buffer_size);
-        return INVALID_BUFFER_SIZE_ERROR;
+        delete db;
+        db = NULL;
+        return (int)BrainFlowExitCodes::INVALID_BUFFER_SIZE_ERROR;
     }
 
-    this->keep_alive = true;
-    this->streaming_thread = std::thread ([this] { this->read_thread (); });
-    this->is_streaming = true;
-    return STATUS_OK;
+    keep_alive = true;
+    streaming_thread = std::thread ([this] { this->read_thread (); });
+    is_streaming = true;
+    return (int)BrainFlowExitCodes::STATUS_OK;
 }
 
 int SyntheticBoard::stop_stream ()
 {
     safe_logger (spdlog::level::trace, "stop stream");
-    if (this->is_streaming)
+    if (is_streaming)
     {
-        this->keep_alive = false;
-        this->is_streaming = false;
-        this->streaming_thread.join ();
-        return STATUS_OK;
+        keep_alive = false;
+        is_streaming = false;
+        streaming_thread.join ();
+        if (streamer)
+        {
+            delete streamer;
+            streamer = NULL;
+        }
+        return (int)BrainFlowExitCodes::STATUS_OK;
     }
     else
     {
-        return STREAM_THREAD_IS_NOT_RUNNING;
+        return (int)BrainFlowExitCodes::STREAM_THREAD_IS_NOT_RUNNING;
     }
 }
 
 int SyntheticBoard::release_session ()
 {
     safe_logger (spdlog::level::trace, "release session");
-    if (this->initialized)
+    if (initialized)
     {
-        this->stop_stream ();
+        stop_stream ();
 
-        if (this->db)
+        if (db)
         {
-            delete this->db;
-            this->db = NULL;
+            delete db;
+            db = NULL;
         }
-        this->initialized = false;
+        initialized = false;
     }
-    return STATUS_OK;
+    return (int)BrainFlowExitCodes::STATUS_OK;
 }
-
 
 void SyntheticBoard::read_thread ()
 {
-    // predefined based sin wave
     unsigned char counter = 0;
-    constexpr int num_samples = 256;
-    float base_wave[256];
-    for (int i = 0; i < num_samples; i++)
-    {
-        float rads = (float)(M_PI / 180.0f);
-        base_wave[i] = this->amplitude * sin (1.8f * i * rads + this->shift);
-    }
-    // eeg channels + 3 accel channels + package num
-    double *package = new double[this->num_channels + 3 + 1];
-    // random distr for noise
-    std::random_device rd;
-    std::mt19937 mt (rd ());
-    float max_noise = (this->noise > 0.001f) ? this->noise : 0.001f;
-    float range = (this->amplitude * max_noise) / 2.0f;
-    safe_logger (spdlog::level::info, "noise range is {}:{}", -range, range);
-    safe_logger (spdlog::level::info, "amplitude is {}", this->amplitude);
-    safe_logger (spdlog::level::info, "shift is {}", this->shift);
-    std::uniform_real_distribution<float> dist (-range, range);
+    constexpr int exg_channels = 16;
+    constexpr int imu_channels = 6; // accel + gyro
+    double sin_phase_rad[exg_channels] = {0.0};
+    double package[SyntheticBoard::package_size] = {0.0};
+    int sampling_rate = 250;
+    std::normal_distribution<double> accel_dist (0.0, 0.35);
+    std::normal_distribution<double> temperature_dist (36.0, 0.5);
+    std::normal_distribution<double> dist_mean_thousand (1000.0, 200.0);
+    std::normal_distribution<double> eda_dist (1.08, 0.01);
 
-    while (this->keep_alive)
+    uint64_t seed = std::chrono::high_resolution_clock::now ().time_since_epoch ().count ();
+    std::mt19937 mt (static_cast<uint32_t> (seed));
+
+    while (keep_alive)
     {
-        // package num
         package[0] = (double)counter;
-        // eeg
-        for (int i = 0; i < this->num_channels; i++)
+        // exg
+        for (int i = 0; i < exg_channels; i++)
         {
-            package[i + 1] = base_wave[counter] + dist (mt);
+            double amplitude = 10.0 * (i + 1);
+            double noise = 0.1 * (i + 1);
+            double freq = 5.0 * (i + 1);
+            double shift = 0.05 * i;
+            double range = (amplitude * noise) / 2.0;
+            std::uniform_real_distribution<double> dist (0 - range, range);
+            sin_phase_rad[i] += 2.0f * M_PI * freq / (double)sampling_rate;
+            if (sin_phase_rad[i] > 2.0f * M_PI)
+            {
+                sin_phase_rad[i] -= 2.0f * M_PI;
+            }
+            package[i + 1] = (amplitude + dist (mt)) * sqrt (2.0) * sin (sin_phase_rad[i] + shift);
         }
-        // accel
-        package[1 + this->num_channels] = this->amplitude * dist (mt);
-        package[2 + this->num_channels] = this->amplitude * dist (mt);
-        package[3 + this->num_channels] = this->amplitude * dist (mt);
+        // accel and gyro
+        for (int i = 0; i < imu_channels; i++)
+        {
+            package[i + 1 + exg_channels] = accel_dist (mt);
+        }
+        // eda
+        package[23] = eda_dist (mt);
+        // ppg
+        package[24] = 5.0 * dist_mean_thousand (mt);
+        package[25] = 5.0 * dist_mean_thousand (mt);
+        // temperature
+        package[26] = temperature_dist (mt);
+        // resistance (add just 2 channels)
+        package[27] = dist_mean_thousand (mt);
+        package[28] = dist_mean_thousand (mt);
+        // battery
+        package[29] = 95.0;
 
-        db->add_data (get_timestamp (), package);
+        double timestamp = get_timestamp ();
+        db->add_data (timestamp, package);
+        streamer->stream_data (package, SyntheticBoard::package_size, timestamp);
         counter++;
 #ifdef _WIN32
-        Sleep ((int)(1000 / this->sampling_rate));
+        // with 3 sampling rate is 250 on all machines
+        Sleep (3);
 #else
-        usleep ((int)(1000000 / this->sampling_rate));
+        usleep (3000);
 #endif
     }
-    delete[] package;
 }
 
-int SyntheticBoard::config_board (char *config)
+int SyntheticBoard::config_board (std::string config, std::string &response)
 {
-    return validate_config (config);
+    return (int)BrainFlowExitCodes::STATUS_OK;
 }

@@ -1,5 +1,9 @@
+#include <algorithm>
+#include <sstream>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
+#include <vector>
 
 #include "board_shim.h"
 
@@ -22,6 +26,9 @@ std::string params_to_string (struct BrainFlowInputParams params)
     j["ip_address"] = params.ip_address;
     j["mac_address"] = params.mac_address;
     j["other_info"] = params.other_info;
+    j["timeout"] = params.timeout;
+    j["serial_number"] = params.serial_number;
+    j["file"] = params.file;
     std::string post_str = j.dump ();
     return post_str;
 }
@@ -32,37 +39,49 @@ std::string params_to_string (struct BrainFlowInputParams params)
 
 void BoardShim::enable_board_logger ()
 {
-    int res = set_log_level (2);
-    if (res != STATUS_OK)
-    {
-        throw BrainFlowException ("failed to enable board logger", res);
-    }
+    BoardShim::set_log_level ((int)LogLevels::LEVEL_INFO);
 }
 
 void BoardShim::disable_board_logger ()
 {
-    int res = set_log_level (6);
-    if (res != STATUS_OK)
-    {
-        throw BrainFlowException ("failed to disable board logger", res);
-    }
+    BoardShim::set_log_level ((int)LogLevels::LEVEL_OFF);
 }
 
 void BoardShim::enable_dev_board_logger ()
 {
-    int res = set_log_level (0);
-    if (res != STATUS_OK)
-    {
-        throw BrainFlowException ("failed to enable dev board logger", res);
-    }
+    BoardShim::set_log_level ((int)LogLevels::LEVEL_TRACE);
 }
 
 void BoardShim::set_log_file (char *log_file)
 {
     int res = ::set_log_file (log_file);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to set log file", res);
+    }
+}
+
+void BoardShim::set_log_level (int log_level)
+{
+    int res = ::set_log_level (log_level);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed to set log level", res);
+    }
+}
+
+void BoardShim::log_message (int log_level, const char *format, ...)
+{
+    char buffer[1024];
+    va_list ap;
+    va_start (ap, format);
+    vsnprintf (buffer, 1024, format, ap);
+    va_end (ap);
+
+    int res = ::log_message (log_level, buffer);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed to write log message", res);
     }
 }
 
@@ -72,23 +91,36 @@ void BoardShim::set_log_file (char *log_file)
 
 BoardShim::BoardShim (int board_id, struct BrainFlowInputParams params)
 {
-    input_params = params_to_string (params);
+    serialized_params = params_to_string (params);
+    this->params = params;
     this->board_id = board_id;
 }
 
 void BoardShim::prepare_session ()
 {
-    int res = ::prepare_session (board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int res = ::prepare_session (board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to prepare session", res);
     }
 }
 
-void BoardShim::start_stream (int buffer_size)
+bool BoardShim::is_prepared ()
 {
-    int res = ::start_stream (buffer_size, board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int prepared = 0;
+    int res = ::is_prepared (&prepared, board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed to check session", res);
+    }
+    return (bool)prepared;
+}
+
+void BoardShim::start_stream (int buffer_size, char *streamer_params)
+{
+    int res = ::start_stream (
+        buffer_size, streamer_params, board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to start stream", res);
     }
@@ -96,8 +128,8 @@ void BoardShim::start_stream (int buffer_size)
 
 void BoardShim::stop_stream ()
 {
-    int res = ::stop_stream (board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int res = ::stop_stream (board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to stop stream", res);
     }
@@ -105,8 +137,8 @@ void BoardShim::stop_stream ()
 
 void BoardShim::release_session ()
 {
-    int res = ::release_session (board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int res = ::release_session (board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to release session", res);
     }
@@ -115,9 +147,9 @@ void BoardShim::release_session ()
 int BoardShim::get_board_data_count ()
 {
     int data_count = 0;
-    int res =
-        ::get_board_data_count (&data_count, board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int res = ::get_board_data_count (
+        &data_count, board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to get board data count", res);
     }
@@ -127,11 +159,11 @@ int BoardShim::get_board_data_count ()
 double **BoardShim::get_board_data (int *num_data_points)
 {
     int num_samples = get_board_data_count ();
-    int num_data_channels = get_num_rows (board_id);
+    int num_data_channels = get_num_rows (get_board_id ());
     double *buf = new double[num_samples * num_data_channels];
-    int res =
-        ::get_board_data (num_samples, buf, board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int res = ::get_board_data (
+        num_samples, buf, board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         delete[] buf;
         throw BrainFlowException ("failed to get board data", res);
@@ -150,11 +182,11 @@ double **BoardShim::get_board_data (int *num_data_points)
 
 double **BoardShim::get_current_board_data (int num_samples, int *num_data_points)
 {
-    int num_data_channels = BoardShim::get_num_rows (board_id);
+    int num_data_channels = BoardShim::get_num_rows (get_board_id ());
     double *buf = new double[num_samples * num_data_channels];
-    int res = ::get_current_board_data (
-        num_samples, buf, num_data_points, board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int res = ::get_current_board_data (num_samples, buf, num_data_points, board_id,
+        const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         delete[] buf;
         throw BrainFlowException ("failed to get board data", res);
@@ -171,25 +203,49 @@ double **BoardShim::get_current_board_data (int num_samples, int *num_data_point
     return output_buf;
 }
 
-void BoardShim::config_board (char *config)
+std::string BoardShim::config_board (char *config)
 {
-    int res = ::config_board (config, board_id, const_cast<char *> (input_params.c_str ()));
-    if (res != STATUS_OK)
+    int response_len = 0;
+    char response[8192];
+    int res = ::config_board (
+        config, response, &response_len, board_id, const_cast<char *> (serialized_params.c_str ()));
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed to config board", res);
     }
+    std::string resp ((const char *)response, response_len);
+    return resp;
 }
 
 // for better user experience and consistency accross bindings we return 2d array from user api, we
 // can not do it directly in low level api because some languages can not pass multidim array to C++
 void BoardShim::reshape_data (int num_data_points, double *linear_buffer, double **output_buf)
 {
-    int num_data_channels = BoardShim::get_num_rows (board_id);
+    int num_data_channels = BoardShim::get_num_rows (get_board_id ());
     for (int i = 0; i < num_data_channels; i++)
     {
         memcpy (
             output_buf[i], linear_buffer + i * num_data_points, sizeof (double) * num_data_points);
     }
+}
+
+int BoardShim::get_board_id ()
+{
+    int master_board_id = board_id;
+    if ((board_id == (int)BoardIds::STREAMING_BOARD) ||
+        (board_id == (int)BoardIds::PLAYBACK_FILE_BOARD))
+    {
+        try
+        {
+            master_board_id = std::stoi (params.other_info);
+        }
+        catch (const std::exception &e)
+        {
+            throw BrainFlowException ("specify master board id using params.other_info",
+                (int)BrainFlowExitCodes::INVALID_ARGUMENTS_ERROR);
+        }
+    }
+    return master_board_id;
 }
 
 //////////////////////////////////////////
@@ -200,7 +256,7 @@ int BoardShim::get_sampling_rate (int board_id)
 {
     int sampling_rate = -1;
     int res = ::get_sampling_rate (board_id, &sampling_rate);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -211,7 +267,7 @@ int BoardShim::get_package_num_channel (int board_id)
 {
     int package_num_channel = -1;
     int res = ::get_package_num_channel (board_id, &package_num_channel);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -222,40 +278,88 @@ int BoardShim::get_timestamp_channel (int board_id)
 {
     int timestamp_channel = 0;
     int res = ::get_timestamp_channel (board_id, &timestamp_channel);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
     return timestamp_channel;
 }
 
+int BoardShim::get_battery_channel (int board_id)
+{
+    int battery_channel = 0;
+    int res = ::get_battery_channel (board_id, &battery_channel);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed get board info", res);
+    }
+    return battery_channel;
+}
+
 int BoardShim::get_num_rows (int board_id)
 {
     int num_rows = 0;
     int res = ::get_num_rows (board_id, &num_rows);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
     return num_rows;
 }
 
+std::string *BoardShim::get_eeg_names (int board_id, int *len)
+{
+    char *eeg_names = new char[4096];
+    int string_len = 0;
+    int res = ::get_eeg_names (board_id, eeg_names, &string_len);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed get board info", res);
+    }
+    std::string line (eeg_names, 0, string_len);
+    std::istringstream ss (line);
+    std::vector<std::string> out;
+    std::string single_name;
+    while (std::getline (ss, single_name, ','))
+    {
+        out.push_back (single_name);
+    }
+    delete[] eeg_names;
+
+    std::string *result = new std::string[out.size ()];
+    std::copy (out.begin (), out.end (), result);
+    *len = out.size ();
+
+    return result;
+}
+
 int *BoardShim::get_eeg_channels (int board_id, int *len)
 {
     int *eeg_channels = new int[MAX_CHANNELS];
     int res = ::get_eeg_channels (board_id, eeg_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
     return eeg_channels;
 }
 
+int *BoardShim::get_exg_channels (int board_id, int *len)
+{
+    int *exg_channels = new int[MAX_CHANNELS];
+    int res = ::get_exg_channels (board_id, exg_channels, len);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed get board info", res);
+    }
+    return exg_channels;
+}
+
 int *BoardShim::get_emg_channels (int board_id, int *len)
 {
     int *emg_channels = new int[MAX_CHANNELS];
     int res = ::get_emg_channels (board_id, emg_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -266,7 +370,7 @@ int *BoardShim::get_ecg_channels (int board_id, int *len)
 {
     int *ecg_channels = new int[MAX_CHANNELS];
     int res = ::get_ecg_channels (board_id, ecg_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -277,7 +381,7 @@ int *BoardShim::get_eog_channels (int board_id, int *len)
 {
     int *eog_channels = new int[MAX_CHANNELS];
     int res = ::get_eog_channels (board_id, eog_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -288,7 +392,7 @@ int *BoardShim::get_eda_channels (int board_id, int *len)
 {
     int *eda_channels = new int[MAX_CHANNELS];
     int res = ::get_eda_channels (board_id, eda_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -299,7 +403,7 @@ int *BoardShim::get_ppg_channels (int board_id, int *len)
 {
     int *ppg_channels = new int[MAX_CHANNELS];
     int res = ::get_ppg_channels (board_id, ppg_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
@@ -310,20 +414,53 @@ int *BoardShim::get_accel_channels (int board_id, int *len)
 {
     int *accel_channels = new int[MAX_CHANNELS];
     int res = ::get_accel_channels (board_id, accel_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
     return accel_channels;
 }
 
+int *BoardShim::get_analog_channels (int board_id, int *len)
+{
+    int *analog_channels = new int[MAX_CHANNELS];
+    int res = ::get_analog_channels (board_id, analog_channels, len);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed get board info", res);
+    }
+    return analog_channels;
+}
+
 int *BoardShim::get_other_channels (int board_id, int *len)
 {
     int *other_channels = new int[MAX_CHANNELS];
     int res = ::get_other_channels (board_id, other_channels, len);
-    if (res != STATUS_OK)
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         throw BrainFlowException ("failed get board info", res);
     }
     return other_channels;
+}
+
+int *BoardShim::get_temperature_channels (int board_id, int *len)
+{
+    int *temperature_channels = new int[MAX_CHANNELS];
+    int res = ::get_temperature_channels (board_id, temperature_channels, len);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed get board info", res);
+    }
+    return temperature_channels;
+}
+
+int *BoardShim::get_resistance_channels (int board_id, int *len)
+{
+    int *resistance_channels = new int[MAX_CHANNELS];
+    int res = ::get_eeg_channels (board_id, resistance_channels, len);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        throw BrainFlowException ("failed get board info", res);
+    }
+    return resistance_channels;
 }

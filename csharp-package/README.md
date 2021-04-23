@@ -1,49 +1,32 @@
-# C#
-* [C# binding for brainflow library(for now Windows only)](./brainflow/brainflow)
-* [Test sample](./brainflow/test)
+<p align="center">
+    <img width="400" height="160" src="https://live.staticflickr.com/65535/49908747533_f359f83610_w.jpg">
+</p>
 
-You will need to install Nuget packages to build it yourself and compile it using Microsoft Visual Studio
 
-## Example:
-```
-using System;
-using brainflow;
+BrainFlow is a library intended to obtain, parse and analyze EEG, EMG, ECG and other kinds of data from biosensors.
 
-namespace test
-{
-    class GetBoardData
-    {
-        static void Main (string[] args)
-        {
-            BoardShim board_shim = new BoardShim ((int)Cyton.board_id, "COM3");
+#### Advantages of BrainFlow:
 
-            board_shim.prepare_session ();
-            Console.WriteLine ("Session is ready");
+* powerful API with many features to simplify development
+    * Straightforward API for data acquisition
+    * Powerful API for signal filtering, denoising, downsampling...
+    * Development tools like Synthetic board, Streaming board, logging API
+* easy to use
+    * BrainFlow has many bindings, you can choose programming language you like
+    * All programming languages provide the same API, so it's simple to switch
+    * API is uniform for all boards, it makes applications on top of BrainFlow almost board agnostic
+* easy to support and extend
+    * Code to read data and to perform signal processing is implemented only once in C/C++, bindings just call C/C++ methods
+    * Powerful CI/CD system which runs integrations tests for each commit automatically using BrainFlow's Emulator
+    * Simplified process to add new boards and methods
 
-            board_shim.start_stream (3600);
-            Console.WriteLine ("Started");
-            System.Threading.Thread.Sleep (5000);
+## [BrainFlow Docs, Dev and User guides and other information](https://brainflow.readthedocs.io)
 
-            board_shim.stop_stream ();
-            Console.WriteLine ("Stopped");
+## [BrainFlow's slack workspace](https://openbraintalk.slack.com/), use this [link to join](https://c6ber255cc.execute-api.eu-west-1.amazonaws.com/Express/)
 
-            Console.WriteLine ("data count: {0}", board_shim.get_board_data_count ());
-            double[,] unprocessed_data = board_shim.get_board_data ();
+## Partners and Sponsors
 
-            // check serialization
-            DataHandler dh = new DataHandler ((int) BoardIds.CYTON_BOARD, data_from_board: unprocessed_data);
-            dh.save_csv ("before_processing.csv");
-            dh = new DataHandler ((int) BoardIds.CYTON_BOARD, csv_file: "before_processing.csv");
-            dh.save_csv ("before_preprocessing2.csv");
-            // check preprocessing
-            dh.remove_dc_offset ();
-            dh.bandpass (1.0, 50.0);
-            dh.save_csv ("after_preprocessing.csv");
+[![OpenBCI](https://live.staticflickr.com/65535/49913349191_0cbd41157c_w.jpg)](https://openbci.com/)
 
-            board_shim.release_session ();
-            Console.WriteLine ("Released");
-            Console.ReadKey ();
-        }
-    }
-}
-```
+## License: 
+MIT
